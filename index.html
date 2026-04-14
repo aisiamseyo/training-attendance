@@ -284,6 +284,12 @@ function sheetsUpdate(range, values) {
 function loadInitData() {
   // 연수 목록 로드 (★연수관리★ B3:D12)
   sheetsGet("★연수관리★!B3:D12").then(function(data) {
+    // 오류 응답 체크
+    if (data.error) {
+      document.getElementById('checkGroup').innerHTML =
+        '<div class="list-error">API 오류: ' + data.error.code + ' — ' + data.error.message + '</div>';
+      return;
+    }
     var rows = data.values || [];
     var trainings = [];
     rows.forEach(function(row) {
@@ -297,9 +303,9 @@ function loadInitData() {
       }
     });
     renderTrainingList(trainings);
-  }).catch(function() {
+  }).catch(function(err) {
     document.getElementById('checkGroup').innerHTML =
-      '<div class="list-error">데이터를 불러오지 못했습니다.<br>페이지를 새로고침 해주세요.</div>';
+      '<div class="list-error">데이터를 불러오지 못했습니다.<br>' + (err.message || err) + '</div>';
   });
 
   // 부서/이름 로드 (☆교직원 연명부 형식☆ A3:H100)
