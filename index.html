@@ -1,1 +1,570 @@
-<html><body>테스트</body></html>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>필수연수 참석 확인서</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.25/jsrsasign-all-min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif;
+    background: #F4F6FA; color: #1f2937;
+    min-height: 100dvh; min-height: 100vh;
+    display: flex; flex-direction: column;
+    padding: 0; margin: 0;
+  }
+  #sigOverlay { flex-shrink: 0; }
+  .container { width: 100%; max-width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0; }
+  .header { background: #1B3A6B; border-radius: 0; padding: 0.8rem 1rem 0.7rem; color: #fff; flex-shrink: 0; }
+  .header-school { font-size: 13px; color: #9bb5d8; margin-bottom: 6px; }
+  .header-title  { font-size: 22px; font-weight: 700; line-height: 1.3; }
+  .header-sub    { font-size: 13px; color: #9bb5d8; margin-top: 6px; }
+  .form-body { background: #fff; border-radius: 0; padding: 1.2rem; border: none; flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+  .loading-list { display: flex; align-items: center; gap: 20px; padding: 1rem 0; color: #9ca3af; font-size: 14px; }
+  .mini-spinner { width: 18px; height: 18px; border: 2px solid #e5e7eb; border-top-color: #1B3A6B; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  .field { margin-bottom: 1.25rem; }
+  .field-label { font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 8px; display: flex; align-items: center; gap: 3px; }
+  .req { color: #e53e3e; }
+  select { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px; font-size: 16px; font-family: inherit; color: #1f2937; background: #fff; outline: none; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 30px center; padding-right: 40px; cursor: pointer; transition: border-color 0.15s; }
+  select:focus { border-color: #1B3A6B; }
+  select.error { border-color: #e53e3e; }
+  select:disabled { background-color: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
+  .name-hint { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+  .check-group { display: flex; flex-direction: column; gap: 9px; }
+  .check-item { display: flex; align-items: center; gap: 10px; font-size: 15px; color: #374151; cursor: pointer; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px; transition: background 0.1s, border-color 0.1s; -webkit-user-select: none; user-select: none; }
+  .check-item.checked { background: #EFF6FF; border-color: #1B3A6B; }
+  .check-item input[type="checkbox"] { display: none; }
+  .custom-cb { width: 22px; height: 22px; border-radius: 4px; border: 2px solid #9ca3af; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #fff; transition: all 0.1s; }
+  .check-item.checked .custom-cb { background: #1B3A6B; border-color: #1B3A6B; }
+  .check-item.checked .custom-cb::after { content: ""; display: block; width: 6px; height: 11px; border: 2px solid #fff; border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px); }
+  .divider { height: 1px; background: #f1f5f9; margin: 1.25rem 0; }
+  .sig-placeholder { border: 1.5px dashed #d1d5db; border-radius: 10px; background: #fafafa; height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; color: #9ca3af; font-size: 14px; transition: border-color 0.15s, background 0.15s; -webkit-user-select: none; user-select: none; }
+  .sig-placeholder.signed { border-color: #1B3A6B; background: #EFF6FF; color: #1B3A6B; }
+  .sig-placeholder.error  { border-color: #e53e3e; }
+  .sig-placeholder-icon   { font-size: 32px; }
+  .err-msg { font-size: 13px; color: #e53e3e; margin-top: 6px; display: none; }
+  .err-msg.show { display: block; }
+  .submitting { display: none; text-align: center; padding: 3rem 1rem; flex: 1; justify-content: center; align-items: center; flex-direction: column; }
+  .spinner { width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: #1B3A6B; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .success { display: none; text-align: center; padding: 3rem 1rem; flex: 1; justify-content: center; align-items: center; flex-direction: column; }
+  .success-icon { width: 192px; height: 192px; background: #EFF6FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 48px; }
+  .success-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; color: #1B3A6B; }
+  .success-desc  { font-size: 14px; color: #6b7280; line-height: 1.7; }
+  .success-time  { font-size: 13px; color: #9ca3af; margin-top: 12px; }
+  .list-error { padding: 12px; background: #FFF1F1; border: 1px solid #fecaca; border-radius: 8px; font-size: 14px; color: #991B1B; }
+
+  #sigOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; background: #fff; flex-direction: column; }
+  #sigOverlay.active { display: flex; }
+  #ovCanvasWrap { flex: 1; position: relative; background: #fafafa; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+  #ovCanvas { position: absolute; top: 0; left: 0; touch-action: none; cursor: crosshair; display: block; }
+  #ovHint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; text-align: center; }
+  #ovHintMain { font-size: 18px; color: #c0c8d8; line-height: 1.3; display: block; white-space: normal; text-align: center; }
+  #ovHintSub { font-size: 13px; color: #d0d8e8; line-height: 1.4; display: block; margin-top: 10px; }
+  #ovPanel { background: #1B3A6B; display: flex; flex-direction: row; align-items: center; justify-content: space-around; flex-shrink: 0; }
+  .ov-panel-label { color: #9bb5d8; font-size: 30px; font-weight: 600; letter-spacing: 0.5px; text-align: center; line-height: 1.6; }
+  .ov-btn-group { display: flex; flex-direction: row; align-items: center; gap: 16px; }
+  .ov-btn { width: 174px; border: none; border-radius: 16px; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s; -webkit-user-select: none; user-select: none; }
+  .ov-btn:active { opacity: 0.7; }
+  .ov-btn-clear  { height: 138px; font-size: 66px; background: rgba(255,255,255,0.15); color: #fff; }
+  .ov-btn-submit { height: 174px; font-size: 36px; font-weight: 700; line-height: 1.5; background: #fff; color: #1B3A6B; }
+  .ov-btn-cancel { height: 108px; font-size: 33px; background: transparent; color: #9bb5d8; border: 1px solid rgba(255,255,255,0.25) !important; }
+
+  @media screen and (orientation: landscape) {
+    #sigOverlay { flex-direction: row; }
+    #ovPanel { width: 25vh; height: 100%; flex-direction: column; padding: 1.5vh 0; justify-content: space-between; }
+    .ov-panel-label { display: flex; font-size: 2vh; }
+    .ov-btn-group { flex-direction: column; gap: 1.5vh; }
+    #ovHintMain { font-size: 16px; }
+    #ovHintSub { display: none; }
+    .ov-btn { width: 20vh; border-radius: 1.5vh; }
+    .ov-btn-clear { height: 16vh; font-size: 8vh; }
+    .ov-btn-submit { height: 22vh; font-size: 4vh; }
+    .ov-btn-cancel { height: 12vh; font-size: 3.5vh; }
+  }
+  @media screen and (orientation: portrait) {
+    #sigOverlay { flex-direction: column; }
+    #ovPanel { width: 100%; height: 30vw; flex-direction: row; padding: 0 4vw; justify-content: space-around; }
+    .ov-panel-label { display: none; }
+    .ov-btn-group { flex-direction: row; gap: 4vw; }
+    .ov-btn { width: 24vw; border-radius: 3vw; height: 22vw; }
+    .ov-btn-clear { font-size: 10vw; }
+    .ov-btn-submit { font-size: 4.5vw; }
+    .ov-btn-cancel { font-size: 4vw; }
+    #ovHintMain { font-size: 18px; }
+    #ovHintSub { font-size: 13px; margin-top: 8px; display: block; }
+  }
+</style>
+</head>
+<body>
+
+<div id="sigOverlay">
+  <div id="ovCanvasWrap">
+    <canvas id="ovCanvas"></canvas>
+    <div id="ovHint">
+      <span id="ovHintMain">여기에 정자로<br>서명(이름)해 주세요</span>
+      <span id="ovHintSub">📱 화면을 가로로 돌리면<br>더 넓게 서명할 수 있습니다</span>
+    </div>
+  </div>
+  <div id="ovPanel">
+    <span class="ov-panel-label">필수연수<br>참석 확인</span>
+    <div class="ov-btn-group">
+      <button class="ov-btn ov-btn-clear"  id="btnOvClear">↺</button>
+      <button class="ov-btn ov-btn-submit" id="btnOvSubmit">참석<br>확인<br>제출</button>
+      <button class="ov-btn ov-btn-cancel" id="btnOvCancel">취소</button>
+    </div>
+    <span class="ov-panel-label" style="font-size:9px; opacity:0.5;">가로로<br>서명하세요</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="header">
+    <p class="header-school">인천기계공업고등학교 교육연구부</p>
+    <p class="header-title">필수연수 참석 확인서</p>
+    <p class="header-sub">QR 스캔 후 작성하시면 자동으로 기록됩니다</p>
+  </div>
+
+  <div class="form-body" id="formArea">
+    <div class="field">
+      <p class="field-label">참석 연수명 <span class="req">*</span></p>
+      <div id="checkGroup">
+        <div class="loading-list"><div class="mini-spinner"></div>연수 목록을 불러오는 중...</div>
+      </div>
+      <p class="err-msg" id="errTraining">연수를 한 개 이상 선택하세요.</p>
+    </div>
+
+    <div class="row2">
+      <div>
+        <p class="field-label">부서 <span class="req">*</span></p>
+        <select id="fdept" onchange="onDeptChange()" disabled>
+          <option value="">불러오는 중...</option>
+        </select>
+        <p class="err-msg" id="errDept">부서를 선택하세요.</p>
+      </div>
+      <div>
+        <p class="field-label">이름 <span class="req">*</span></p>
+        <select id="fname" disabled>
+          <option value="">부서를 먼저 선택하세요</option>
+        </select>
+        <p class="name-hint" id="nameHint"></p>
+        <p class="err-msg" id="errName">이름을 선택하세요.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field" style="margin-bottom:0;">
+      <p class="field-label">서명 <span class="req">*</span></p>
+      <p style="font-size:13px; color:#9ca3af; margin-bottom:8px;">아래를 탭하면 서명 화면이 열립니다</p>
+      <div class="sig-placeholder" id="sigPlaceholder" onclick="openOverlay()">
+        <span class="sig-placeholder-icon">✍️</span>
+        <span id="sigPlaceholderText">탭하여 서명하기</span>
+      </div>
+      <p class="err-msg" id="errSig">서명을 입력하세요.</p>
+    </div>
+  </div>
+
+  <div class="submitting" id="submittingArea">
+    <div class="spinner"></div>
+    <p style="font-size:15px; color:#6b7280;">제출 중입니다. 잠시만 기다려 주세요...</p>
+  </div>
+
+  <div class="success" id="successArea">
+    <div class="success-icon">✅</div>
+    <p class="success-title">참석 확인 완료</p>
+    <p class="success-desc" id="successMsg"></p>
+    <p class="success-time" id="successTime"></p>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── 설정값 ────────────────────────────────────────────────
+var SPREADSHEET_ID  = '1QHdt8U4rRWNv8c722dlK_zgjj_kBwIa3fj-rh07AbRk';
+var SERVICE_EMAIL   = 'id-424@training-attendance-493303.iam.gserviceaccount.com';
+var PRIVATE_KEY     = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCeHXXw8h777F8u\nwWmut73b7goN4CXCDY69mg2uKdo4dZ8P9AzGH/QHp1LOOtOc+tgMEo4LSxuH/3Db\nMYqI9AW5YwYBUX0xOJ//o4ei90tIZcjNyF5git2uyFlRQVBUXJyxGz+/FXMqtFUf\nnf4em/xND/zntwBQorXi2nDOg+Y4Cqf3Btt84VbXAWs//lBeKxBDjM8vEvcBGaM4\n1t5kNLZ4crfBFQYXiWxYGvDd3gYHTWCvs93SgOzEyzGKtSSExtE9B5F6P/csi1ft\nH6sy2PMW2TDoxsfGFtT7avKXFDLczxw52V+Sr/b3lAPh4F97hZLcimYHuDUh9vcT\ngyfS8PL9AgMBAAECggEAC+KjtUtDSvqXTmNu4e72kEFSHig647MIh3YSEIUdiIrx\nkaMYZrg2LBvGx1vNVl/WElTpZS3t0YjrtH5X2eLwnzaIrVwGcMcUjS8qCJ+q2AlW\npn6o9tGEHRmlpSGnZoADrfMiFTyz3deVDShfgXDbmUtaCReiKBg4WzzCUrPAKswm\nrtfUYqhfCEpV3WLx/kqF8Us3Y4wwR/eJl4ag21Uan89de4IdFrFA0zV0jfHsaHBU\nv/B8uL+SNBwbef3iNOIc+BDtzqhASfw8G2kXgFYCDQiSXwLsQvgwEYmo3tyKmXc4\nfNaBNmvCYoA1FptFm0FYP8vX4PnRTt1qzY35iJLI3QKBgQDJ0ibHewBZSb9SEjFw\ne0yFU73HIkqQRQvYkOJFmZqwC6FkAP+nZZnIlX4rxasr9QMrNzhWFd43QzIRz6De\n2TUIXSft0BkINivBbIcuS4YF76XzQoi4yFB9wJifQjzI10+y7N7F9BImbf+6ZYax\naBr2OYGIeFbeRJE2oNoHMBrbXwKBgQDIj7CjlJK6ns2v8hWW4SmIx/Fc0XFVSIsw\ntpkrXwR80xYqmaHwx9AscMB/+g0SYiPUxBAZqVLkbjLk+Eams78An9KVz7PvsehN\n/nsQB9zSs1GwYGKlPzGGyubZGTcpsAp5SSay7kOPdoMA/G1G+7kAdJtxV6d6aJNg\npF5hBxQrIwKBgCn8YDjrq9znbLfkNQjTfc3W6Ao/ZgexdY9uRMR5+iZZpQ+q7YSj\nrGSARSlSDBQu+qPI7x1pmzsf7ZCrAyqZQWEmECJ3Ql3k9yFcNJs69vzRKFL9KnhW\no/glUxr+qqqVsGzmvkmsRwJbq/HZITZTFBjZSctcTaYb2aHlwLXyGgQ9AoGAOF05\ndR9iBRRwFcxhCOAKfihCyqUJxr/2biBC949igXoJNruqaTKebH7bepvZZJs0Gq1n\nIO8XHp9hqjukD2FgglpoIjYXCXvkH1cvWpf7FTPT909/KZWS46DOM6EEgbC5oNBQ\nEeUoE39o3bQTOemwWlJrBPVvWdVd5cELzRTiNCUCgYEAlcOMMjB7Nci7fzKDPS72\nUxFVH+NttSCEAA+E0qQyb2EwPkwRNwGYAps+baNdBOLx53+Abjk/Emf2Z6LsEDu5\ntQS130ho9Ckd57pRzP94Gl4qc4i5oPEBiWiynUQLhNWhA5qZYC+5GzaDLHZOeGEX\nhxc0owjsUkr6g7Rbtuyq5sk=\n-----END PRIVATE KEY-----\n';
+
+// ── 전역 상태 ─────────────────────────────────────────────
+var deptNameMap  = {};
+var deptOrder    = [];
+var hasSig       = false;
+var savedSigData = null;
+var accessToken  = null;
+var tokenExpiry  = 0;
+
+// ── 유틸 ─────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showErr(id, show) {
+  document.getElementById(id).classList.toggle('show', show);
+}
+
+// ── 뒤로가기 방지 ────────────────────────────────────────
+history.pushState(null, null, location.href);
+window.addEventListener('popstate', function() { history.pushState(null, null, location.href); });
+
+// ── JWT / Access Token ────────────────────────────────────
+function getAccessToken() {
+  if (accessToken && Date.now() < tokenExpiry - 60000) {
+    return Promise.resolve(accessToken);
+  }
+  var now = Math.floor(Date.now() / 1000);
+  var header = { alg: 'RS256', typ: 'JWT' };
+  var claim  = {
+    iss: SERVICE_EMAIL,
+    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now
+  };
+  var sHeader = JSON.stringify(header);
+  var sClaim  = JSON.stringify(claim);
+  var sJWT    = KJUR.jws.JWS.sign('RS256', sHeader, sClaim, PRIVATE_KEY);
+
+  return fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + sJWT
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    accessToken = d.access_token;
+    tokenExpiry = Date.now() + (d.expires_in * 1000);
+    return accessToken;
+  });
+}
+
+// ── Sheets API 읽기 ───────────────────────────────────────
+function sheetsGet(range) {
+  return getAccessToken().then(function(token) {
+    return fetch(
+      'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID +
+      '/values/' + encodeURIComponent(range),
+      { headers: { 'Authorization': 'Bearer ' + token } }
+    ).then(function(r) { return r.json(); });
+  });
+}
+
+// ── Sheets API 쓰기 ───────────────────────────────────────
+function sheetsAppend(range, values) {
+  return getAccessToken().then(function(token) {
+    return fetch(
+      'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID +
+      '/values/' + encodeURIComponent(range) + ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',
+      {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: values })
+      }
+    ).then(function(r) { return r.json(); });
+  });
+}
+
+// ── Sheets API 특정 셀 업데이트 ──────────────────────────
+function sheetsUpdate(range, values) {
+  return getAccessToken().then(function(token) {
+    return fetch(
+      'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID +
+      '/values/' + encodeURIComponent(range) + '?valueInputOption=USER_ENTERED',
+      {
+        method: 'PUT',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: values })
+      }
+    ).then(function(r) { return r.json(); });
+  });
+}
+
+// ── 초기 데이터 로드 ─────────────────────────────────────
+function loadInitData() {
+  // 연수 목록 로드 (★연수관리★ B3:D12)
+  sheetsGet("★연수관리★!B3:D12").then(function(data) {
+    var rows = data.values || [];
+    var trainings = [];
+    rows.forEach(function(row) {
+      var name = (row[2] || '').trim();
+      if (name) {
+        trainings.push({
+          date:   (row[0] || '').trim(),
+          target: (row[1] || '').trim(),
+          name:   name
+        });
+      }
+    });
+    renderTrainingList(trainings);
+  }).catch(function() {
+    document.getElementById('checkGroup').innerHTML =
+      '<div class="list-error">데이터를 불러오지 못했습니다.<br>페이지를 새로고침 해주세요.</div>';
+  });
+
+  // 부서/이름 로드 (☆교직원 연명부 형식☆ A3:H100)
+  sheetsGet("☆교직원 연명부 형식☆!A3:H200").then(function(data) {
+    var rows = data.values || [];
+    var entries = [];
+    rows.forEach(function(row) {
+      var seqL  = row[0]; var deptL = (row[1]||'').trim(); var nameL = (row[2]||'').trim();
+      if (seqL && !isNaN(Number(seqL))) entries.push({ seq: Number(seqL), dept: deptL, name: nameL });
+      var seqR  = row[5]; var deptR = (row[6]||'').trim(); var nameR = (row[7]||'').trim();
+      if (seqR && !isNaN(Number(seqR))) entries.push({ seq: Number(seqR), dept: deptR, name: nameR });
+    });
+    entries.sort(function(a,b){ return a.seq - b.seq; });
+    var lastDept = '';
+    entries.forEach(function(e) {
+      if (e.dept && e.dept !== '부서') {
+        if (!deptNameMap[e.dept]) { deptNameMap[e.dept] = []; deptOrder.push(e.dept); }
+        lastDept = e.dept;
+      }
+      if (e.name && e.name !== '이름' && lastDept) deptNameMap[lastDept].push(e.name);
+    });
+    var deptEl = document.getElementById('fdept');
+    var validDepts = deptOrder.filter(function(d){ return d && d !== '부서'; });
+    deptEl.innerHTML = '<option value="">선택하세요</option>' +
+      validDepts.map(function(d){ return '<option value="'+esc(d)+'">'+esc(d)+'</option>'; }).join('');
+    deptEl.disabled = false;
+  });
+}
+
+// ── 연수 목록 렌더링 ─────────────────────────────────────
+function renderTrainingList(list) {
+  var g = document.getElementById('checkGroup');
+  if (!list || !list.length) {
+    g.innerHTML = '<div class="list-error">★연수관리★에 등록된 연수가 없습니다.</div>'; return;
+  }
+  g.innerHTML = '<div class="check-group">' +
+    list.map(function(item) {
+      var label = item.name;
+      if (item.date)   label += ' (' + item.date + ')';
+      if (item.target) label += ' [' + item.target + ']';
+      return '<label class="check-item" onclick="toggleCheck(this)">' +
+        '<input type="checkbox" data-name="'+esc(item.name)+'" data-date="'+esc(item.date)+'" data-target="'+esc(item.target)+'">' +
+        '<div class="custom-cb"></div>' + esc(label) + '</label>';
+    }).join('') + '</div>';
+}
+
+function toggleCheck(el) {
+  var cb = el.querySelector('input'); cb.checked = !cb.checked;
+  el.classList.toggle('checked', cb.checked);
+}
+
+// ── 부서→이름 연동 ───────────────────────────────────────
+function onDeptChange() {
+  var dept = document.getElementById('fdept').value;
+  var ne = document.getElementById('fname');
+  var he = document.getElementById('nameHint');
+  document.getElementById('fdept').classList.remove('error');
+  showErr('errDept', false);
+  ne.innerHTML = ''; ne.disabled = true; he.textContent = '';
+  if (!dept) { ne.innerHTML = '<option value="">부서를 먼저 선택하세요</option>'; return; }
+  var names = deptNameMap[dept];
+  if (!names || !names.length) {
+    ne.innerHTML = '<option value="">해당 부서 명단 없음</option>';
+    he.textContent = '☆교직원 연명부 형식☆에서 ' + dept + ' 명단을 확인하세요.';
+    return;
+  }
+  ne.innerHTML = '<option value="">이름을 선택하세요</option>' +
+    names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+  ne.disabled = false;
+  he.textContent = dept + ' 소속 ' + names.length + '명';
+}
+
+// ── 서명 오버레이 ─────────────────────────────────────────
+var overlay   = document.getElementById('sigOverlay');
+var wrap      = document.getElementById('ovCanvasWrap');
+var ov        = document.getElementById('ovCanvas');
+var ctx       = ov.getContext('2d');
+var drawing   = false;
+var ovHasSig  = false;
+var pathPoints = [];
+var curStroke  = [];
+
+function fitCanvas() {
+  var dpr = window.devicePixelRatio || 1;
+  var w = wrap.offsetWidth, h = wrap.offsetHeight;
+  ov.width = w * dpr; ov.height = h * dpr;
+  ov.style.width = w + 'px'; ov.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.strokeStyle = '#0033CC';
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+}
+
+function openOverlay() {
+  var dept = document.getElementById('fdept').value;
+  var name = document.getElementById('fname').value.trim();
+  var checked = [].slice.call(document.querySelectorAll('#checkGroup input:checked'));
+  var ok = true;
+  showErr('errTraining', !checked.length); if (!checked.length) ok = false;
+  showErr('errDept', !dept); document.getElementById('fdept').classList.toggle('error', !dept); if (!dept) ok = false;
+  showErr('errName', !name); document.getElementById('fname').classList.toggle('error', !name); if (!name) ok = false;
+  if (!ok) return;
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      fitCanvas(); ovHasSig = false; showHint(true);
+      if (hasSig && savedSigData) {
+        var img = new Image();
+        img.onload = function() { ctx.drawImage(img, 0, 0, wrap.offsetWidth, wrap.offsetHeight); ovHasSig = true; showHint(false); };
+        img.src = savedSigData;
+      }
+    });
+  });
+}
+
+function showHint(show) {
+  document.getElementById('ovHint').style.display = show ? '' : 'none';
+  if (show) document.getElementById('ovHintMain').innerHTML = '여기에 정자로<br>서명(이름)해 주세요';
+}
+
+function closeOverlay() {
+  overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('btnOvClear').addEventListener('click', function() {
+  ctx.clearRect(0, 0, wrap.offsetWidth, wrap.offsetHeight);
+  pathPoints = []; curStroke = []; ovHasSig = false; showHint(true);
+});
+document.getElementById('btnOvCancel').addEventListener('click', closeOverlay);
+
+document.getElementById('btnOvSubmit').addEventListener('click', function() {
+  if (!ovHasSig) { showHint(true); document.getElementById('ovHintMain').innerHTML = '서명을 먼저 해주세요 ✍️'; return; }
+  var PAD = 10, SAVE_W = 600, SAVE_H = 300;
+  var screenLW = ctx.lineWidth;
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  pathPoints.forEach(function(st) {
+    st.forEach(function(p) {
+      if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+    });
+  });
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = wrap.offsetWidth; maxY = wrap.offsetHeight; }
+  var hw = screenLW / 2 + PAD;
+  minX = Math.max(0, minX - hw); minY = Math.max(0, minY - hw);
+  maxX = Math.min(wrap.offsetWidth, maxX + hw); maxY = Math.min(wrap.offsetHeight, maxY + hw);
+  var bboxW = maxX - minX, bboxH = maxY - minY;
+  var scale = Math.min(SAVE_W / bboxW, SAVE_H / bboxH);
+  var SAVE_LW = Math.max(2, Math.round(screenLW * scale * 1.5));
+  var offX = (SAVE_W - bboxW * scale) / 2, offY = (SAVE_H - bboxH * scale) / 2;
+  var offC = document.createElement('canvas');
+  offC.width = SAVE_W; offC.height = SAVE_H;
+  var offCtx = offC.getContext('2d');
+  offCtx.fillStyle = '#fff'; offCtx.fillRect(0, 0, SAVE_W, SAVE_H);
+  offCtx.strokeStyle = '#000'; offCtx.lineWidth = SAVE_LW; offCtx.lineCap = 'round'; offCtx.lineJoin = 'round';
+  pathPoints.forEach(function(stroke) {
+    if (!stroke.length) return;
+    offCtx.beginPath();
+    offCtx.moveTo((stroke[0].x - minX) * scale + offX, (stroke[0].y - minY) * scale + offY);
+    for (var pi = 1; pi < stroke.length; pi++) {
+      offCtx.lineTo((stroke[pi].x - minX) * scale + offX, (stroke[pi].y - minY) * scale + offY);
+    }
+    offCtx.stroke();
+    if (stroke.length === 1) {
+      offCtx.beginPath();
+      offCtx.arc((stroke[0].x - minX) * scale + offX, (stroke[0].y - minY) * scale + offY, SAVE_LW / 2, 0, Math.PI * 2);
+      offCtx.fillStyle = '#000'; offCtx.fill();
+    }
+  });
+  savedSigData = offC.toDataURL('image/png', 0.92);
+  hasSig = true;
+  var ph = document.getElementById('sigPlaceholder');
+  ph.classList.add('signed'); ph.classList.remove('error');
+  document.getElementById('sigPlaceholderText').textContent = '서명 완료 ✓  (탭하면 재서명)';
+  showErr('errSig', false);
+  closeOverlay();
+  doSubmit();
+});
+
+function getPos(e) {
+  var r = ov.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  var sx = (ov.width / dpr) / r.width, sy = (ov.height / dpr) / r.height;
+  var cx, cy;
+  if (e.touches && e.touches.length) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+  else if (e.changedTouches && e.changedTouches.length) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+  else { cx = e.clientX; cy = e.clientY; }
+  return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
+}
+
+function onStart(e) { e.preventDefault(); e.stopPropagation(); drawing = true; var p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); curStroke = [p]; showHint(false); }
+function onMove(e) { if (!drawing) return; e.preventDefault(); e.stopPropagation(); var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); curStroke.push(p); ovHasSig = true; }
+function onEnd(e) { e.preventDefault(); drawing = false; if (curStroke.length > 0) { pathPoints.push(curStroke); curStroke = []; } }
+
+ov.addEventListener('touchstart', onStart, { passive: false });
+ov.addEventListener('touchmove',  onMove,  { passive: false });
+ov.addEventListener('touchend',   onEnd,   { passive: false });
+ov.addEventListener('touchcancel',onEnd,   { passive: false });
+ov.addEventListener('mousedown',  onStart);
+ov.addEventListener('mousemove',  onMove);
+ov.addEventListener('mouseup',    onEnd);
+ov.addEventListener('mouseleave', onEnd);
+
+window.addEventListener('resize', function() {
+  if (!overlay.classList.contains('active')) return;
+  setTimeout(function() {
+    fitCanvas(); pathPoints = []; curStroke = []; ovHasSig = false; showHint(true);
+    document.getElementById('ovHintMain').innerHTML = '화면이 바뀌었습니다.<br>다시 정자로 서명(이름)해 주세요 ✍️';
+  }, 200);
+});
+
+// ── 폼 제출 ──────────────────────────────────────────────
+function doSubmit() {
+  var checked = [].slice.call(document.querySelectorAll('#checkGroup input:checked'))
+    .map(function(c){ return { name: c.dataset.name, date: c.dataset.date, target: c.dataset.target || '' }; });
+  var dept = document.getElementById('fdept').value;
+  var name = document.getElementById('fname').value.trim();
+
+  document.getElementById('formArea').style.display = 'none';
+  document.getElementById('submittingArea').style.display = 'flex';
+
+  // KST 시간
+  var kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+  var Y = kst.getUTCFullYear();
+  var M = ('0'+(kst.getUTCMonth()+1)).slice(-2);
+  var D = ('0'+kst.getUTCDate()).slice(-2);
+  var h = ('0'+kst.getUTCHours()).slice(-2);
+  var m = ('0'+kst.getUTCMinutes()).slice(-2);
+  var s = ('0'+kst.getUTCSeconds()).slice(-2);
+  var timeStr = Y+'-'+M+'-'+D+' '+h+':'+m+':'+s;
+
+  // 각 연수별로 시트에 기록
+  var promises = checked.map(function(training) {
+    var sheetName = training.name + '(' + training.date + ')';
+    if (sheetName.length > 31) sheetName = sheetName.slice(0, 27) + '…)';
+    // 서명 이미지는 텍스트로 표시 (GitHub Pages에서는 Drive 업로드 불가)
+    var row = [timeStr, dept, name, '서명완료'];
+    return sheetsAppend(sheetName + '!A:D', [row]).catch(function() {
+      // 시트가 없으면 기본 시트에 기록
+      return sheetsAppend('시트1!A:D', [row]);
+    });
+  });
+
+  Promise.all(promises).then(function() {
+    document.getElementById('submittingArea').style.display = 'none';
+    document.getElementById('successArea').style.display = 'flex';
+    document.getElementById('successMsg').textContent =
+      name + ' 선생님 (' + dept + ') — ' +
+      checked.map(function(t){ return t.name; }).join(', ') + ' 참석이 확인되었습니다.';
+    document.getElementById('successTime').textContent = '응답 시간: ' + timeStr;
+  }).catch(function(err) {
+    document.getElementById('submittingArea').style.display = 'none';
+    document.getElementById('formArea').style.display = 'block';
+    var ph = document.getElementById('sigPlaceholder');
+    ph.classList.add('signed');
+    document.getElementById('sigPlaceholderText').textContent = '서명 완료 ✓  (탭하면 재서명)';
+    alert('제출 중 오류가 발생했습니다. 다시 시도해 주세요.\n' + err.message);
+  });
+}
+
+// ── 페이지 로드 ───────────────────────────────────────────
+window.addEventListener('load', function() {
+  loadInitData();
+});
+</script>
+</body>
+</html>
